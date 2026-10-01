@@ -1,0 +1,173 @@
+name: Personal CI
+
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: personal-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  library:
+    name: Library and installed consumers (${{ matrix.backend }})
+    if: github.repository == 'mrmidi/Wisdom'
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            backend: dx12
+          - os: ubuntu-latest
+            backend: vulkan
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libx11-dev libxext-dev libxcb1-dev libx11-xcb-dev libwayland-dev wayland-protocols
+
+      - name: Fetch Vulkan headers
+        if: runner.os == 'Linux'
+        run: git clone --depth 1 https://github.com/KhronosGroup/Vulkan-Headers.git vulkan-headers
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Record toolchain
+        run: |
+          mkdir -p ci-logs
+          cmake --version | tee ci-logs/toolchain.log
+          ninja --version | tee -a ci-logs/toolchain.log
+          git rev-parse HEAD | tee -a ci-logs/toolchain.log
+
+      - name: Configure without examples
+        run: |
+          set -o pipefail
+          args=()
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            args+=("-DWISDOM_VULKAN_HEADER_PATH=$GITHUB_WORKSPACE/vulkan-headers/include")
+          fi
+          cmake -S . -B ci-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/ci-install" \
+            -DWISDOM_BUILD_EXAMPLES=OFF \
+            -DWISDOM_BUILD_TESTS=OFF \
+            -DWISDOM_BUILD_GENERATOR=ON \
+            "${args[@]}" 2>&1 | tee ci-logs/configure.log
+
+      - name: Build library and independent generator
+        run: |
+          set -o pipefail
+          cmake --build ci-build --parallel 4 2>&1 | tee ci-logs/build.log
+
+      - name: Install package
+        run: |
+          set -o pipefail
+          cmake --install ci-build 2>&1 | tee ci-logs/install.log
+
+      - name: Configure installed consumers
+        run: |
+          set -o pipefail
+          args=()
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            args+=("-DWISDOM_VULKAN_HEADER_PATH=$GITHUB_WORKSPACE/vulkan-headers/include")
+          fi
+          cmake -S .github/ci/consumer -B ci-consumer -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/ci-install" \
+            "${args[@]}" 2>&1 | tee ci-logs/consumer-configure.log
+
+      - name: Build installed C and C++ consumers
+        run: |
+          set -o pipefail
+          cmake --build ci-consumer --parallel 4 2>&1 | tee ci-logs/consumer-build.log
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: personal-ci-${{ matrix.backend }}
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            ci-logs/
+            ci-build/CMakeCache.txt
+            ci-build/CMakeFiles/CMakeConfigureLog.yaml
+            ci-consumer/CMakeCache.txt
+            ci-consumer/CMakeFiles/CMakeConfigureLog.yaml
+
+  macos-generator:
+    name: Independent generator (macOS)
+    if: github.repository == 'mrmidi/Wisdom'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Fetch Vulkan headers for configuration
+        run: git clone --depth 1 https://github.com/KhronosGroup/Vulkan-Headers.git vulkan-headers
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Record toolchain
+        run: |
+          mkdir -p ci-logs
+          {
+            sw_vers
+            xcrun --sdk macosx --show-sdk-version
+            clang --version
+            cmake --version
+            git rev-parse HEAD
+          } > ci-logs/toolchain.log
+
+      # The upstream library does not support macOS yet. Build only the generator.
+      - name: Configure independent generator
+        run: |
+          set -o pipefail
+          cmake -S . -B ci-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DWISDOM_BUILD_EXAMPLES=OFF \
+            -DWISDOM_BUILD_TESTS=OFF \
+            -DWISDOM_BUILD_GENERATOR=ON \
+            -DWISDOM_VULKAN_HEADER_PATH="$GITHUB_WORKSPACE/vulkan-headers/include" \
+            2>&1 | tee ci-logs/configure.log
+
+      - name: Build and run generator help
+        run: |
+          set -o pipefail
+          cmake --build ci-build --target generator --parallel 4 2>&1 | tee ci-logs/build.log
+          ./ci-build/generator/generator --help | tee ci-logs/generator-help.log
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: personal-ci-macos-generator
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            ci-logs/
+            ci-build/CMakeCache.txt
+            ci-build/CMakeFiles/CMakeConfigureLog.yaml
