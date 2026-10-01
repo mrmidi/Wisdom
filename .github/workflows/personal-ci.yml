@@ -17,7 +17,6 @@ jobs:
   library:
     name: Library and installed consumers (${{ matrix.backend }})
     if: github.repository == 'mrmidi/Wisdom'
-    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -120,7 +119,6 @@ jobs:
     name: Independent generator (macOS)
     if: github.repository == 'mrmidi/Wisdom'
     runs-on: macos-latest
-    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v6
