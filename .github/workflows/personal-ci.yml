@@ -101,6 +101,36 @@ jobs:
           set -o pipefail
           cmake --build ci-consumer --parallel 4 2>&1 | tee ci-logs/consumer-build.log
 
+      - name: Build detached examples in each linkage mode
+        run: |
+          set -o pipefail
+          cmake -E copy_directory examples ci-examples-source
+          dxc=""
+          for mode in static shared headers; do
+            args=()
+            if [[ "$RUNNER_OS" == "Linux" ]]; then
+              args+=("-DWISDOM_VULKAN_HEADER_PATH=$GITHUB_WORKSPACE/vulkan-headers/include")
+            fi
+            for candidate in STATIC SHARED HEADERS; do
+              enabled=OFF
+              if [[ "${mode^^}" == "$candidate" ]]; then
+                enabled=ON
+              fi
+              args+=("-DWISDOM_EXAMPLES_BUILD_${candidate}=$enabled")
+            done
+            if [[ -n "$dxc" ]]; then
+              args+=("-DDXC_EXECUTABLE=$dxc")
+            fi
+            cmake -S ci-examples-source -B "ci-examples/$mode" -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/ci-install" \
+              -DCPM_SOURCE_CACHE="$GITHUB_WORKSPACE/ci-build/_deps_cache" \
+              "${args[@]}" 2>&1 | tee "ci-logs/examples-$mode-configure.log"
+            dxc="$(sed -n 's/^DXC_EXECUTABLE:[^=]*=//p' "ci-examples/$mode/CMakeCache.txt" | tr -d '\r')"
+            cmake --build "ci-examples/$mode" --parallel 4 \
+              2>&1 | tee "ci-logs/examples-$mode-build.log"
+          done
+
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -114,6 +144,8 @@ jobs:
             ci-build/CMakeFiles/CMakeConfigureLog.yaml
             ci-consumer/CMakeCache.txt
             ci-consumer/CMakeFiles/CMakeConfigureLog.yaml
+            ci-examples/*/CMakeCache.txt
+            ci-examples/*/CMakeFiles/CMakeConfigureLog.yaml
 
   macos-generator:
     name: Independent generator (macOS)
