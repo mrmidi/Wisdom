@@ -114,7 +114,7 @@ cmake --build build-generator --target generator
 - `WISDOM_BUILD_STATIC=ON` build static library version.
 - `WISDOM_BUILD_SHARED=ON` build shared/dynamic library version.
 - `WISDOM_BUILD_PLATFORM=ON` build unified platform extension library.
-- `WISDOM_USE_AGILITY_SDK=OFF` download and build with Agility SDK instead of Windows SDK, this allows using latest DirectX 12 features on older Windows versions, but requires additional setup and dependencies. Default is `OFF`, which uses Windows SDK that comes with the system and DirectX-Headers.
+- `WISDOM_USE_AGILITY_SDK=ON` download and build with Agility SDK instead of Windows SDK, this allows using latest DirectX 12 features on older Windows versions, but requires additional setup and dependencies. Set `OFF` to use DirectX-Headers instead.
 - `WISDOM_BUILD_DOCS=OFF` build documentation with Doxygen, default is dependent on whether you are building the library as a top project (ON) or as a part/dep for other (OFF)
 
 - `DXC_EXECUTABLE="Path/to/bin/dxc"` use an existing shader compiler when building examples. Otherwise, examples download DXC for Windows or Linux. DXC is not a library dependency or part of the installed package.
