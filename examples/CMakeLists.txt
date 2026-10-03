@@ -2,7 +2,19 @@ cmake_minimum_required(VERSION 3.22)
 project(wisdom-examples LANGUAGES C CXX)
 
 if(NOT TARGET wis::wisdom-headers)
-  find_package(wisdom CONFIG REQUIRED)
+  if(NOT CPM_SOURCE_CACHE)
+    set(CPM_SOURCE_CACHE "${CMAKE_CURRENT_BINARY_DIR}/_deps_cache")
+  endif()
+  include(cmake/get_cpm.cmake)
+  if(NOT CPM_wisdom_SOURCE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../version/VERSION")
+    set(CPM_wisdom_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/..")
+  endif()
+  CPMAddPackage(
+    NAME wisdom
+    GITHUB_REPOSITORY Agrael1/Wisdom
+    GIT_TAG master
+    OPTIONS "WISDOM_BUILD_EXAMPLES OFF" "WISDOM_BUILD_TESTS OFF"
+            "WISDOM_BUILD_GENERATOR OFF" "WISDOM_BUILD_PLATFORM ON")
 endif()
 
 set(WISDOM_EXAMPLES_STATIC_AVAILABLE OFF)
@@ -28,7 +40,7 @@ set(WISDOM_EXAMPLES_MODES)
 foreach(MODE STATIC SHARED HEADERS)
   if(WISDOM_EXAMPLES_BUILD_${MODE})
     if(NOT WISDOM_EXAMPLES_${MODE}_AVAILABLE)
-      message(FATAL_ERROR "The installed Wisdom package does not provide the ${MODE} core and platform targets. Build Wisdom with the required libraries and WISDOM_BUILD_PLATFORM=ON, or disable WISDOM_EXAMPLES_BUILD_${MODE}.")
+      message(FATAL_ERROR "Wisdom does not provide the ${MODE} core and platform targets. Build Wisdom with the required libraries and WISDOM_BUILD_PLATFORM=ON, or disable WISDOM_EXAMPLES_BUILD_${MODE}.")
     endif()
     string(TOLOWER ${MODE} MODE_NAME)
     list(APPEND WISDOM_EXAMPLES_MODES ${MODE_NAME})
