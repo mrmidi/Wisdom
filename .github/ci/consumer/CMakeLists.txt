@@ -1,0 +1,32 @@
+cmake_minimum_required(VERSION 3.22)
+project(WisdomPersonalCIConsumer LANGUAGES C CXX)
+
+set(DXC_EXECUTABLE "consumer-owned-dxc")
+find_package(wisdom CONFIG REQUIRED)
+if(NOT DXC_EXECUTABLE STREQUAL "consumer-owned-dxc")
+  message(FATAL_ERROR "Wisdom changed the consumer shader compiler")
+endif()
+if(COMMAND wis_load_dxc OR COMMAND wis_compile_shader OR COMMAND _ww_load_latest_dxc)
+  message(FATAL_ERROR "Example shader helpers leaked into the installed package")
+endif()
+
+foreach(MODE static shared headers)
+  if(MODE STREQUAL "static")
+    set(WISDOM_TARGET wis::wisdom)
+  elseif(MODE STREQUAL "shared")
+    set(WISDOM_TARGET wis::wisdom-shared)
+  else()
+    set(WISDOM_TARGET wis::wisdom-headers)
+  endif()
+
+  # The C interface uses compiled implementations; header-only mode is C++.
+  if(NOT MODE STREQUAL "headers")
+    add_executable(consumer-c-${MODE} entry_main.c)
+    target_link_libraries(consumer-c-${MODE} PRIVATE ${WISDOM_TARGET})
+    set_target_properties(consumer-c-${MODE} PROPERTIES LINKER_LANGUAGE CXX C_STANDARD 99)
+  endif()
+
+  add_executable(consumer-cpp-${MODE} ../../../tests/integration/cmake/entry_main.cpp)
+  target_link_libraries(consumer-cpp-${MODE} PRIVATE ${WISDOM_TARGET})
+  set_target_properties(consumer-cpp-${MODE} PROPERTIES CXX_STANDARD 20)
+endforeach()
