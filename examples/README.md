@@ -4,7 +4,7 @@ Examples can be built as part of Wisdom or as a separate CMake project that buil
 
 ## Standalone build
 
-Configure and build the examples directly. CMake uses Wisdom from the surrounding checkout, or downloads upstream `master` when the examples are detached. Wisdom and the example dependencies are built together; no installed Wisdom package is required.
+Configure and build the examples directly. CMake uses Wisdom from the surrounding checkout, or downloads a pinned Wisdom revision with the required header-only support when the examples are detached. Wisdom and the example dependencies are built together; no installed Wisdom package is required.
 
 ```sh
 cmake -S examples -B build/examples -G Ninja \
