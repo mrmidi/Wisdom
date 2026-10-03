@@ -110,6 +110,7 @@ jobs:
         run: |
           set -o pipefail
           cmake -E copy_directory examples ci-examples-source
+          wisdom_source="$(pwd -W 2>/dev/null || pwd)"
           dxc=""
           for mode in static shared headers; do
             args=()
@@ -128,7 +129,7 @@ jobs:
             fi
             cmake -S ci-examples-source -B "ci-examples/$mode" -G Ninja \
               -DCMAKE_BUILD_TYPE=Release \
-              -DCPM_wisdom_SOURCE="$GITHUB_WORKSPACE" \
+              -DCPM_wisdom_SOURCE="$wisdom_source" \
               -DCPM_SOURCE_CACHE="$GITHUB_WORKSPACE/ci-build/_deps_cache" \
               "${args[@]}" 2>&1 | tee "ci-logs/examples-$mode-configure.log"
             dxc="$(sed -n 's/^DXC_EXECUTABLE:[^=]*=//p' "ci-examples/$mode/CMakeCache.txt" | tr -d '\r')"
