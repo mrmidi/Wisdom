@@ -1,0 +1,106 @@
+name: Personal Metal instance CI
+
+on:
+  push:
+    branches:
+      - ci/metal-instance
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: personal-metal-instance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  existing-backends:
+    if: github.repository == 'mrmidi/Wisdom'
+    uses: ./.github/workflows/ci.yml
+
+  metal:
+    name: macOS Metal (${{ matrix.mode }})
+    if: github.repository == 'mrmidi/Wisdom'
+    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mode: static
+            static: 'ON'
+            shared: 'OFF'
+          - mode: shared
+            static: 'OFF'
+            shared: 'ON'
+          - mode: headers
+            static: 'OFF'
+            shared: 'OFF'
+    env:
+      BUILD_DIR: build/metal
+      INSTALL_DIR: ${{ github.workspace }}/build/install
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Record toolchain
+        run: |
+          mkdir -p ci-logs
+          {
+            sw_vers
+            uname -m
+            xcode-select -p
+            xcodebuild -version
+            xcrun --sdk macosx --show-sdk-path
+            xcrun --sdk macosx --show-sdk-version
+            xcrun clang++ --version
+            cmake --version
+            ninja --version
+          } | tee ci-logs/toolchain.log
+
+      - name: Configure
+        run: |
+          cmake -S . -B "$BUILD_DIR" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=26.0 \
+            -DCMAKE_OSX_SYSROOT="$(xcrun --sdk macosx --show-sdk-path)" \
+            -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR" \
+            -DCPM_SOURCE_CACHE="$RUNNER_TEMP/wisdom-deps" \
+            -DWISDOM_METAL=ON \
+            -DWISDOM_BUILD_GENERATOR=ON \
+            -DWISDOM_BUILD_TESTS=ON \
+            -DWISDOM_BUILD_STATIC=${{ matrix.static }} \
+            -DWISDOM_BUILD_SHARED=${{ matrix.shared }} \
+            -DWISDOM_BUILD_EXAMPLES=OFF \
+            -DWISDOM_BUILD_PLATFORM=OFF \
+            2>&1 | tee ci-logs/configure.log
+
+      - name: Build and test
+        run: |
+          cmake --build "$BUILD_DIR" --parallel 3 2>&1 | tee ci-logs/build.log
+          ctest --test-dir "$BUILD_DIR" --output-on-failure 2>&1 | tee ci-logs/tests.log
+
+      - name: Install and test public consumers
+        run: |
+          cmake --install "$BUILD_DIR" 2>&1 | tee ci-logs/install.log
+          cmake -S tests/integration/metal-consumer -B build/consumer -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$INSTALL_DIR" \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=26.0 \
+            -DCMAKE_OSX_SYSROOT="$(xcrun --sdk macosx --show-sdk-path)" \
+            -DWISDOM_CONSUMER_MODES=${{ matrix.mode }} \
+            2>&1 | tee ci-logs/consumer-configure.log
+          cmake --build build/consumer --parallel 3 2>&1 | tee ci-logs/consumer-build.log
+          ctest --test-dir build/consumer --output-on-failure 2>&1 | tee ci-logs/consumer-tests.log
+
+      - name: Upload logs and generated interfaces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metal-instance-${{ matrix.mode }}
+          path: |
+            ci-logs/
+            build/metal/metal-api/
+            build/metal/Testing/Temporary/
+            build/consumer/Testing/Temporary/
