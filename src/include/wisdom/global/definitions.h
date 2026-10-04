@@ -149,14 +149,14 @@
 #endif // WISDOM_API
 
 // platform detection
-#if !defined(WISDOM_UWP) && !defined(WISDOM_WINDOWS) && !defined(WISDOM_LINUX)
+#if !defined(WISDOM_UWP) && !defined(WISDOM_WINDOWS) && !defined(WISDOM_LINUX) && !defined(WISDOM_MAC)
 
 // clang-format off
-#ifndef WISDOM_VULKAN
+#if !defined(WISDOM_VULKAN) && !defined(WISDOM_METAL)
 #if defined __has_include && (__has_include(<vulkan/vulkan.h>) || __has_include(<vulkan.h>))
 #define WISDOM_VULKAN 1
 #endif // __has_include && (__has_include(<vulkan/vulkan.h>) || __has_include(<vulkan.h>))
-#endif // !WISDOM_VULKAN
+#endif // !WISDOM_VULKAN && !WISDOM_METAL
 // clang-format on
 
 // Try to detect the platform
@@ -171,12 +171,14 @@
 #        else // _WINRT_DLL
 #            define WISDOM_WINDOWS 1
 #        endif // _WINRT_DLL
+#    elif defined(__APPLE__) && defined(WISDOM_METAL)
+#        define WISDOM_MAC 1
 #    elif defined(__linux__)
 #        define WISDOM_LINUX 1
 #    else
 #        error "Platform not supported"
 #    endif // _WIN32
-#endif // !WISDOM_UWP && !WISDOM_WINDOWS && !WISDOM_LINUX
+#endif // !WISDOM_UWP && !WISDOM_WINDOWS && !WISDOM_LINUX && !WISDOM_MAC
 
 #ifndef FORCEVK_SWITCH
 #    if defined(WISDOM_VULKAN) && defined(WISDOM_FORCE_VULKAN)

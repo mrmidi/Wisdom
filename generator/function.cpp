@@ -47,6 +47,10 @@ void Generator::ParseFunctions(tinyxml2::XMLElement* type)
         type_map[name] = TypeKind::Function;
         ref.name = name;
 
+        if (!func->BoolAttribute("metal", false)) {
+            ref.FilterBackend(Backend::DX12 | Backend::Vulkan);
+        }
+
         if (auto* version = func->FindAttribute("version")) {
             ref.version = version->Value();
         } else {

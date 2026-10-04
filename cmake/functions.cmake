@@ -92,6 +92,40 @@ if (WIN32)
     endfunction(_ww_load_nuget_dependency)
 endif()
 
+# Function to validate the Metal build configuration
+function(wisdom_validate_metal)
+    if (WISDOM_VULKAN OR WISDOM_FORCE_VULKAN OR WISDOM_VULKAN_HEADER_PATH)
+        message(FATAL_ERROR "WISDOM_METAL is Metal-only. Remove the Vulkan configuration options.")
+    endif ()
+    if (WISDOM_USE_CONAN)
+        message(FATAL_ERROR "The current Conan recipe requires Vulkan and does not support WISDOM_METAL.")
+    endif ()
+    if (NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+        message(FATAL_ERROR "WISDOM_METAL requires macOS.")
+    endif ()
+    if (NOT CMAKE_OSX_ARCHITECTURES STREQUAL "arm64")
+        message(FATAL_ERROR "WISDOM_METAL requires CMAKE_OSX_ARCHITECTURES=arm64.")
+    endif ()
+    if (NOT CMAKE_OSX_DEPLOYMENT_TARGET OR CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS 26.0)
+        message(FATAL_ERROR "WISDOM_METAL requires a macOS deployment target of 26.0 or newer.")
+    endif ()
+    set(WISDOM_MACOS_SDK "${CMAKE_OSX_SYSROOT}")
+    if (NOT WISDOM_MACOS_SDK)
+        set(WISDOM_MACOS_SDK macosx)
+    endif ()
+    execute_process(
+            COMMAND xcrun --sdk "${WISDOM_MACOS_SDK}" --show-sdk-version
+            OUTPUT_VARIABLE WISDOM_MACOS_SDK_VERSION
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            COMMAND_ERROR_IS_FATAL ANY)
+    if (WISDOM_MACOS_SDK_VERSION VERSION_LESS 26.0)
+        message(FATAL_ERROR "WISDOM_METAL requires macOS SDK 26.0 or newer.")
+    endif ()
+    if (NOT WISDOM_BUILD_GENERATOR)
+        message(FATAL_ERROR "The Metal backend requires WISDOM_BUILD_GENERATOR=ON.")
+    endif ()
+endfunction()
+
 # Function to detect platform and set relevant variables
 function(wisdom_detect_platform)
     set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/ecm")
@@ -125,6 +159,12 @@ function(wisdom_detect_platform)
     # Detect underlying graphics system
     if (WISDOM_WINDOWS)
         set(WISDOM_DX12 TRUE CACHE BOOL "Use D3D12 as default graphics API" FORCE)
+    endif ()
+
+    # Metal-only configuration does not acquire Vulkan implicitly.
+    if (WISDOM_METAL)
+        set(WISDOM_VULKAN FALSE CACHE BOOL "Vulkan support detected" FORCE)
+        return()
     endif ()
 
     # Detect Vulkan

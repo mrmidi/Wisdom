@@ -88,12 +88,13 @@
       <handle name="Instance" version="0.7.0" doc="Class for creating adapters.">
         <impl for="vk" size="3"/>
         <impl for="dx" size="2"/>
+        <impl for="mtl" size="1"/>
       </handle>
     </handles>
 
     <functions>
       <!-- Instance Functions -->
-      <func name="CreateInstance" version="0.7.0" doc="Creates the {Instance::} with extensions, specified in extension array.">
+      <func name="CreateInstance" version="0.7.0" doc="Creates the {Instance::} with extensions, specified in extension array." metal="true">
         <ret type="Instance" name="instance" result="true" doc="points to {Instance::}, which is initialized on success."/>
         <arg type="DebugDesc" name="debug_desc" mod="const,ptr" default="nullptr" doc="describes a pointer to {DebugDesc::}, which defines debug callback and debug layer usage. If `nullptr`, debug layer is disabled."/>
         <arg type="InstanceExtensionHeader" name="extensions" mod="ptr,span" default="nullptr" doc="points to an array of extensions that are to be initialized with pointers to {InstanceExtensionHeader::}."/>

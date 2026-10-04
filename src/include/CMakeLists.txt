@@ -2,6 +2,7 @@ set(WISDOM_CORE_SOURCES)
 set(WISDOM_CORE_LIBS)
 set(WISDOM_CORE_DEFINITIONS
     NOMINMAX
+    $<$<BOOL:${WISDOM_METAL}>:WISDOM_METAL=1>
     $<$<BOOL:${WISDOM_WINDOWS}>:WISDOM_WINDOWS=1>
     $<$<BOOL:${WISDOM_LINUX}>:WISDOM_LINUX=1>
     $<BUILD_INTERFACE:$<$<BOOL:${WISDOM_DX12}>:WISDOM_DX12=1>>
@@ -47,6 +48,31 @@ if(WISDOM_VULKAN)
     "wisdom/vulkan/vk_pipeline_cache.cpp")
 endif()
 
+if(WISDOM_METAL)
+  list(APPEND WISDOM_CORE_SOURCES "wisdom/metal/mtl_instance.cpp")
+  list(APPEND WISDOM_CORE_LIBS "-framework Foundation" "-framework Metal"
+       "-framework QuartzCore")
+endif()
+
+function(wis_setup_metal_target TARGET_NAME VISIBILITY)
+  if(WISDOM_METAL)
+    add_dependencies(${TARGET_NAME} generate-metal-api)
+    target_include_directories(
+      ${TARGET_NAME} BEFORE ${VISIBILITY}
+      $<BUILD_INTERFACE:${WISDOM_METAL_API_DIR}/include>)
+    target_include_directories(
+      ${TARGET_NAME} SYSTEM ${VISIBILITY}
+      $<BUILD_INTERFACE:${METAL_CPP_INCLUDE_DIR}>
+      $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/wisdom/metal-cpp>)
+    if(NOT TARGET_NAME STREQUAL "wisdom-headers")
+      target_compile_options(
+        ${TARGET_NAME}
+        PRIVATE -Wall -Wextra -Wunguarded-availability
+                $<$<CONFIG:Debug>:-fno-omit-frame-pointer>)
+    endif()
+  endif()
+endfunction()
+
 # header target
 add_library(wisdom-headers INTERFACE "../natvis/span.natvis"
             "../natvis/opaque_handles.natvis")
@@ -60,6 +86,8 @@ target_link_libraries(wisdom-headers INTERFACE ${WISDOM_CORE_LIBS})
 
 target_compile_definitions(wisdom-headers INTERFACE ${WISDOM_CORE_DEFINITIONS}
                                                     WISDOM_HEADER_ONLY)
+wis_setup_metal_target(wisdom-headers INTERFACE)
+
 install(
   TARGETS wisdom-headers
   EXPORT wisdom-targets
@@ -82,6 +110,8 @@ if(WISDOM_BUILD_STATIC)
 
   set_target_properties(wisdom PROPERTIES CXX_STANDARD 20 # UNITY_BUILD ON
                                           DEBUG_POSTFIX d)
+
+  wis_setup_metal_target(wisdom PUBLIC)
 
   install(
     TARGETS wisdom
@@ -126,6 +156,8 @@ if(WISDOM_BUILD_SHARED)
     INCLUDE_GUARD_NAME
     WISDOM_CORE_EXPORTS_H)
 
+  wis_setup_metal_target(wisdom-shared PUBLIC)
+
   install(
     TARGETS wisdom-shared
     EXPORT wisdom-targets
@@ -144,3 +176,8 @@ install(
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/wisdom
   NAMESPACE wis::
   FILE wisdom-targets.cmake)
+
+if(WISDOM_METAL)
+  install(DIRECTORY "${WISDOM_METAL_API_DIR}/include/wisdom/"
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/wisdom)
+endif()

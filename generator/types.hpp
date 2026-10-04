@@ -31,8 +31,10 @@ enum class Backend {
     Any,
     DX12 = 1 << 0,
     Vulkan = 1 << 1,
-    All = DX12 | Vulkan,
+    Metal = 1 << 2,
+    All = DX12 | Vulkan | Metal,
 };
+inline constexpr std::array Backends{Backend::DX12, Backend::Vulkan, Backend::Metal};
 constexpr Backend operator|(Backend a, Backend b)
 {
     return static_cast<Backend>(static_cast<int>(a) | static_cast<int>(b));
@@ -187,8 +189,8 @@ struct WisHandle {
     std::string_view version;
     std::string_view platform; // optional
     Extends extends = Extends::None; // handle for extension
-    std::array<uint32_t, 2> sizes{};
-    std::array<uint32_t, 2> view_sizes{};
+    std::array<uint32_t, 3> sizes{};
+    std::array<uint32_t, 3> view_sizes{};
     std::string_view view_override; // optional
 
     std::list<std::string> functions; // must be string to hold destructors
@@ -202,6 +204,9 @@ public:
         if (backend == Backend::Vulkan) {
             return sizes[1];
         }
+        if (backend == Backend::Metal) {
+            return sizes[2];
+        }
         return 0;
     }
     uint32_t GetViewSize(Backend backend) const noexcept
@@ -211,6 +216,9 @@ public:
         }
         if (backend == Backend::Vulkan) {
             return view_sizes[1];
+        }
+        if (backend == Backend::Metal) {
+            return view_sizes[2];
         }
         return 0;
     }
@@ -222,6 +230,9 @@ public:
         }
         if (sizes[1] != 0) {
             result = result | Backend::Vulkan;
+        }
+        if (sizes[2] != 0) {
+            result = result | Backend::Metal;
         }
         return result;
     }

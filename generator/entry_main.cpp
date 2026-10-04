@@ -7,7 +7,7 @@ inline constexpr std::string_view input_file = INPUT_FILE;
 void FormatFiles(std::span<const std::filesystem::path> files)
 {
     constexpr uint32_t repeats = 5;
-    if (clang_format_exe.empty()) {
+    if (clang_format_exe.empty() || clang_format_exe.ends_with("-NOTFOUND")) {
         return;
     }
 

@@ -171,6 +171,8 @@ public:
             return "DX12";
         case Backend::Vulkan:
             return "VK";
+        case Backend::Metal:
+            return "MTL";
         default:
             return "";
         }
@@ -184,8 +186,36 @@ public:
             return "dx";
         case Backend::Vulkan:
             return "vk";
+        case Backend::Metal:
+            return "mtl";
         default:
             return "";
+        }
+    }
+    static constexpr std::string_view GetBackendDefine(Backend backend) noexcept
+    {
+        switch (backend) {
+        case Backend::DX12:
+            return "WISDOM_DX12";
+        case Backend::Vulkan:
+            return "WISDOM_VULKAN";
+        case Backend::Metal:
+            return "WISDOM_METAL";
+        default:
+            return "";
+        }
+    }
+    static constexpr std::string_view GetBackendTypesHeader(Backend backend) noexcept
+    {
+        switch (backend) {
+        case Backend::DX12:
+            return "dx12/dx12_types.hpp";
+        case Backend::Vulkan:
+            return "vulkan/vk_types.hpp";
+        case Backend::Metal:
+            return "metal/mtl_types.hpp";
+        default:
+            std::abort();
         }
     }
     static constexpr std::string_view GetExtendsString(Extends impl) noexcept

@@ -37,6 +37,11 @@ if (WISDOM_VULKAN)
     include(${CMAKE_CURRENT_LIST_DIR}/deps/deps_vulkan.cmake)
 endif ()
 
+# Metal dependencies
+if (WISDOM_METAL)
+    include(${CMAKE_CURRENT_LIST_DIR}/deps/deps_metal.cmake)
+endif ()
+
 # if tests enabled, add Catch2
 if (WISDOM_BUILD_TESTS)
     CPMAddPackage(

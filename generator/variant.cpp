@@ -40,6 +40,9 @@ void Generator::ParseVariant(tinyxml2::XMLElement* type)
     module_map[active_module_name].variants_in_order.emplace_back(name);
     type_map[name] = TypeKind::Variant;
     ref.name = name;
+    if (!type->BoolAttribute("metal", false)) {
+        ref.FilterBackend(Backend::DX12 | Backend::Vulkan);
+    }
 
     if (auto* size = type->FindAttribute("doc")) {
         ref.doc = size->Value();

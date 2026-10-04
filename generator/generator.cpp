@@ -64,6 +64,7 @@ void Generator::WriteModuleAPI()
     auto& module = it->second;
     std::filesystem::path cpp_output_path = std::filesystem::path(main_output_dir) / module.gen_path;
     std::filesystem::path cpp_output_path_api = cpp_output_path / "generated";
+    std::filesystem::create_directories(cpp_output_path_api);
     WriteCAPI(cpp_output_path_api);
     WriteCPPAPI(cpp_output_path_api);
 
@@ -283,75 +284,40 @@ extern "C" {{
         }
     }
 
-    file << R"(
-#ifdef WISDOM_DX12
-)";
+    for (auto backend : Backends) {
+        auto define = GetBackendDefine(backend);
+        file << std::format("\n#ifdef {}\n", define);
 
-    // Write handles
-    for (auto& handle_name : module.handles_in_order) {
-        auto& handle_def = handle_map[handle_name];
-        auto supported = handle_def.GetBackend();
-        if (has(supported, Backend::DX12)) {
-            file << MakeCHandle(handle_def, Backend::DX12);
-            file << "\n";
+        // Write handles
+        for (auto& handle_name : module.handles_in_order) {
+            auto& handle_def = handle_map[handle_name];
+            auto supported = handle_def.GetBackend();
+            if (has(supported, backend)) {
+                file << MakeCHandle(handle_def, backend);
+                file << "\n";
+            }
         }
-    }
 
-    // Write variants
-    for (auto& variant_name : module.variants_in_order) {
-        auto& variant_def = variant_map[variant_name];
-        if (has(variant_def.backend, Backend::DX12)) {
-            file << MakeCVariant(variant_def, Backend::DX12);
-            file << "\n";
+        // Write variants
+        for (auto& variant_name : module.variants_in_order) {
+            auto& variant_def = variant_map[variant_name];
+            if (has(variant_def.backend, backend)) {
+                file << MakeCVariant(variant_def, backend);
+                file << "\n";
+            }
         }
-    }
 
-    // Write functions
-    for (auto& func_name : module.functions_in_order) {
-        auto& func_def = function_map[func_name];
-        if (has(func_def.backend, Backend::DX12)) {
-            file << MakeCFunctionDecl(func_def, Backend::DX12, api_macro);
-            file << "\n";
+        // Write functions
+        for (auto& func_name : module.functions_in_order) {
+            auto& func_def = function_map[func_name];
+            if (has(func_def.backend, backend)) {
+                file << MakeCFunctionDecl(func_def, backend, api_macro);
+                file << "\n";
+            }
         }
+
+        file << std::format("\n#endif // {}\n", define);
     }
-
-    file << R"(
-#endif // WISDOM_DX12
-
-#ifdef WISDOM_VULKAN
-)";
-
-    // Write Vulkan handles
-    for (auto& handle_name : module.handles_in_order) {
-        auto& handle_def = handle_map[handle_name];
-        auto supported = handle_def.GetBackend();
-        if (has(supported, Backend::Vulkan)) {
-            file << MakeCHandle(handle_def, Backend::Vulkan);
-            file << "\n";
-        }
-    }
-
-    // Write Vulkan variants
-    for (auto& variant_name : module.variants_in_order) {
-        auto& variant_def = variant_map[variant_name];
-        if (has(variant_def.backend, Backend::Vulkan)) {
-            file << MakeCVariant(variant_def, Backend::Vulkan);
-            file << "\n";
-        }
-    }
-
-    // Write Vulkan functions
-    for (auto& func_name : module.functions_in_order) {
-        auto& func_def = function_map[func_name];
-        if (has(func_def.backend, Backend::Vulkan)) {
-            file << MakeCFunctionDecl(func_def, Backend::Vulkan, api_macro);
-            file << "\n";
-        }
-    }
-
-    file << R"(
-#endif // WISDOM_VULKAN
-)";
 
     // Write footer
     // clang-format off
@@ -466,113 +432,62 @@ namespace wis {{
         }
     }
 
-    file << std::format(
-        R"(
-}} // namespace wis
+    file << "\n} // namespace wis\n";
 
-#ifdef WISDOM_DX12
-#include <{0}/dx12/dx12_types.hpp>
+    for (auto backend : Backends) {
+        auto define = GetBackendDefine(backend);
+        file << std::format(
+            "\n#ifdef {}\n#include <{}/{}>\n{}namespace wis {{\n",
+            define,
+            include_root,
+            GetBackendTypesHeader(backend),
+            backend == Backend::Metal ? "" : "\n"
+        );
 
-namespace wis {{
-)",
-        include_root
-    );
-
-    // Write Views for handles
-    for (auto& handle_name : module.views_in_order) {
-        auto& handle_def = handle_map[handle_name];
-        if (handle_def.GetViewSize(Backend::DX12) > 0) {
-            file << MakeCPPView(handle_def, Backend::DX12);
-            file << "\n";
+        // Write Views for handles
+        for (auto& handle_name : module.views_in_order) {
+            auto& handle_def = handle_map[handle_name];
+            if (has(handle_def.GetBackend(), backend) && handle_def.GetViewSize(backend) > 0) {
+                file << MakeCPPView(handle_def, backend);
+                file << "\n";
+            }
         }
-    }
 
-    // Write variants
-    for (auto& variant_name : module.variants_in_order) {
-        auto& variant_def = variant_map[variant_name];
-        if (has(variant_def.backend, Backend::DX12)) {
-            file << MakeCPPVariant(variant_def, Backend::DX12);
-            file << "\n";
+        // Write variants
+        for (auto& variant_name : module.variants_in_order) {
+            auto& variant_def = variant_map[variant_name];
+            if (has(variant_def.backend, backend)) {
+                file << MakeCPPVariant(variant_def, backend);
+                file << "\n";
+            }
         }
-    }
 
-    // Write handles
-    for (auto& handle_name : module.handles_in_order) {
-        auto& handle_def = handle_map[handle_name];
-        auto supported = handle_def.GetBackend();
-        if (has(supported, Backend::DX12)) {
-            file << MakeCPPHandle(handle_def, Backend::DX12);
-            file << "\n";
+        // Write handles
+        for (auto& handle_name : module.handles_in_order) {
+            auto& handle_def = handle_map[handle_name];
+            auto supported = handle_def.GetBackend();
+            if (has(supported, backend)) {
+                file << MakeCPPHandle(handle_def, backend);
+                file << "\n";
+            }
         }
-    }
 
-    // Write functions
-    for (auto& func_name : module.free_functions_in_order) {
-        FunctionKey key = MakeFunctionKey("", func_name);
-        auto& func_def = function_map[key];
-        if (has(func_def.backend, Backend::DX12)) {
-            file << MakeCPPFunctionImpl(func_def, Backend::DX12, "inline ");
-            file << "\n";
+        // Write functions
+        for (auto& func_name : module.free_functions_in_order) {
+            FunctionKey key = MakeFunctionKey("", func_name);
+            auto& func_def = function_map[key];
+            if (has(func_def.backend, backend)) {
+                file << MakeCPPFunctionImpl(func_def, backend, "inline ");
+                file << "\n";
+            }
         }
-    }
 
-    file << std::format(
-        R"(
-}} // namespace wis
-#endif // WISDOM_DX12
-
-#ifdef WISDOM_VULKAN
-#include <{0}/vulkan/vk_types.hpp>
-
-namespace wis {{
-)",
-        include_root
-    );
-
-    // Write Views for handles
-    for (auto& handle_name : module.views_in_order) {
-        auto& handle_def = handle_map[handle_name];
-        if (handle_def.GetViewSize(Backend::Vulkan) > 0) {
-            file << MakeCPPView(handle_def, Backend::Vulkan);
-            file << "\n";
-        }
-    }
-
-    // Write variants
-    for (auto& variant_name : module.variants_in_order) {
-        auto& variant_def = variant_map[variant_name];
-        if (has(variant_def.backend, Backend::Vulkan)) {
-            file << MakeCPPVariant(variant_def, Backend::Vulkan);
-            file << "\n";
-        }
-    }
-
-    // Write handles
-    for (auto& handle_name : module.handles_in_order) {
-        auto& handle_def = handle_map[handle_name];
-        auto supported = handle_def.GetBackend();
-        if (has(supported, Backend::Vulkan)) {
-            file << MakeCPPHandle(handle_def, Backend::Vulkan);
-            file << "\n";
-        }
-    }
-
-    // Write functions
-    for (auto& func_name : module.free_functions_in_order) {
-        FunctionKey key = MakeFunctionKey("", func_name);
-        auto& func_def = function_map[key];
-        if (has(func_def.backend, Backend::Vulkan)) {
-            file << MakeCPPFunctionImpl(func_def, Backend::Vulkan, "inline ");
-            file << "\n";
-        }
+        file << std::format("\n}} // namespace wis\n#endif // {}\n", define);
     }
 
     // Write footer
     // clang-format off
     file << std::format(R"(
-}} // namespace wis
-#endif // WISDOM_VULKAN
-
 #endif // WISDOM_{}_CPP_API_HPP
 )", header_guard);
     // clang-format on
@@ -628,226 +543,130 @@ static_assert(WISDOM_UWP && _WIN32, "Platform error");
         header_guard,
         backend_include
     );
-    constexpr static auto impl_dx = GetBackendSuffix(Backend::DX12);
-    constexpr static auto impl_vk = GetBackendSuffix(Backend::Vulkan);
-
-    if (module.name == "Core") {
-        file_w << "\n#define WIS_SHADER_INTERMEDIATE_DXIL 1\n";
-    }
-
-    bool dx_has_handles = false;
-    for (auto& handle_name : module.handles_in_order) {
-        if (has(handle_map[handle_name].GetBackend(), Backend::DX12)) {
-            dx_has_handles = true;
-            break;
+    for (auto backend : Backends) {
+        if (backend == Backend::Vulkan) {
+            file_w << "\n#elif defined(WISDOM_VULKAN)\n";
+        } else if (backend == Backend::Metal) {
+            file_w << "\n#elif defined(WISDOM_METAL)\n\n";
         }
-    }
-    if (!dx_has_handles) {
-        for (auto& handle_name : module.views_in_order) {
-            if (handle_map[handle_name].GetViewSize(Backend::DX12) > 0) {
-                dx_has_handles = true;
+        if (module.name == "Core" && backend != Backend::Metal) {
+            file_w << std::format(
+                "\n#define WIS_SHADER_INTERMEDIATE_{} 1\n",
+                backend == Backend::DX12 ? "DXIL" : "SPIRV"
+            );
+        }
+
+        bool has_handles = false;
+        for (auto& handle_name : module.handles_in_order) {
+            if (has(handle_map[handle_name].GetBackend(), backend)) {
+                has_handles = true;
                 break;
             }
         }
-    }
-
-    bool dx_has_variants = false;
-    for (auto& variant_name : module.variants_in_order) {
-        if (has(variant_map[variant_name].backend, Backend::DX12)) {
-            dx_has_variants = true;
-            break;
-        }
-    }
-
-    if (dx_has_handles) {
-        file_w << "\n\n//==============================================================\n"
-                  "// Handles\n"
-                  "//==============================================================\n\n";
-
-        // Write handles
-        for (auto& handle_name : module.handles_in_order) {
-            auto& handle_def = handle_map[handle_name];
-            if (has(handle_def.GetBackend(), Backend::DX12)) {
-                file_w << std::format(
-                    "typedef struct {} {};\n",
-                    GetCFullTypename(handle_def.name, Backend::DX12),
-                    GetCFullTypename(handle_def.name)
-                );
+        if (!has_handles) {
+            for (auto& handle_name : module.views_in_order) {
+                if (handle_map[handle_name].GetViewSize(backend) > 0) {
+                    has_handles = true;
+                    break;
+                }
             }
         }
 
-        // Write Views for handles
-        for (auto& handle_name : module.views_in_order) {
-            auto& handle_def = handle_map[handle_name];
-            if (handle_def.GetViewSize(Backend::DX12) > 0) {
-                file_w << std::format(
-                    "typedef struct {}View {}View;\n",
-                    GetCFullTypename(handle_def.name, Backend::DX12),
-                    GetCFullTypename(handle_def.name)
-                );
-            }
-        }
-    }
-
-    if (dx_has_variants) {
-        file_w << "\n\n//==============================================================\n"
-                  "// Variants\n"
-                  "//==============================================================\n\n";
-
-        // Write variants
+        bool has_variants = false;
         for (auto& variant_name : module.variants_in_order) {
-            auto& variant_def = variant_map[variant_name];
-            if (has(variant_def.backend, Backend::DX12)) {
-                file_w << std::format(
-                    "typedef struct {} {};\n",
-                    GetCFullTypename(variant_def.name, Backend::DX12),
-                    GetCFullTypename(variant_def.name)
-                );
-            }
-        }
-    }
-
-    file_w << "\n\n//==============================================================\n"
-              "// Functions\n"
-              "//==============================================================\n\n";
-
-    // Write view getters for handles
-    for (auto& handle_name : module.handles_in_order) {
-        auto& handle_def = handle_map[handle_name];
-        if (has(handle_def.GetBackend(), Backend::DX12) && handle_def.GetViewSize(Backend::DX12) > 0) {
-            file_w << std::format(
-                "#define wisGet{}View wisGet{}{}View\n",
-                handle_def.name,
-                GetBackendSuffix(Backend::DX12),
-                handle_def.name
-            );
-        }
-    }
-
-    // Write functions
-    for (auto& func_name : module.functions_in_order) {
-        auto& func_def = function_map[func_name];
-        if (has(func_def.backend, Backend::DX12)) {
-            file_w << std::format(
-                "#define {} {}\n",
-                GetCFullFunctionName(func_name),
-                GetCFullFunctionName(func_name, Backend::DX12)
-            );
-        }
-    }
-
-    file_w << R"(
-#elif defined(WISDOM_VULKAN)
-)";
-
-    if (module.name == "Core") {
-        file_w << "\n#define WIS_SHADER_INTERMEDIATE_SPIRV 1\n";
-    }
-
-    bool vk_has_handles = false;
-    for (auto& handle_name : module.handles_in_order) {
-        if (has(handle_map[handle_name].GetBackend(), Backend::Vulkan)) {
-            vk_has_handles = true;
-            break;
-        }
-    }
-    if (!vk_has_handles) {
-        for (auto& handle_name : module.views_in_order) {
-            if (handle_map[handle_name].GetViewSize(Backend::Vulkan) > 0) {
-                vk_has_handles = true;
+            if (has(variant_map[variant_name].backend, backend)) {
+                has_variants = true;
                 break;
             }
         }
-    }
 
-    bool vk_has_variants = false;
-    for (auto& variant_name : module.variants_in_order) {
-        if (has(variant_map[variant_name].backend, Backend::Vulkan)) {
-            vk_has_variants = true;
-            break;
+        if (has_handles) {
+            if (backend != Backend::Metal) {
+                file_w << "\n\n//==============================================================\n"
+                          "// Handles\n"
+                          "//==============================================================\n\n";
+            }
+
+            // Write handles
+            for (auto& handle_name : module.handles_in_order) {
+                auto& handle_def = handle_map[handle_name];
+                if (has(handle_def.GetBackend(), backend)) {
+                    file_w << std::format(
+                        "typedef struct {} {};\n",
+                        GetCFullTypename(handle_def.name, backend),
+                        GetCFullTypename(handle_def.name)
+                    );
+                }
+            }
+
+            // Write Views for handles
+            for (auto& handle_name : module.views_in_order) {
+                auto& handle_def = handle_map[handle_name];
+                if (has(handle_def.GetBackend(), backend) && handle_def.GetViewSize(backend) > 0) {
+                    file_w << std::format(
+                        "typedef struct {}View {}View;\n",
+                        GetCFullTypename(handle_def.name, backend),
+                        GetCFullTypename(handle_def.name)
+                    );
+                }
+            }
         }
-    }
 
-    if (vk_has_handles) {
-        file_w << "\n\n//==============================================================\n"
-                  "// Handles\n"
-                  "//==============================================================\n\n";
+        if (has_variants) {
+            if (backend != Backend::Metal) {
+                file_w << "\n\n//==============================================================\n"
+                          "// Variants\n"
+                          "//==============================================================\n\n";
+            }
 
-        // Write handles
+            // Write variants
+            for (auto& variant_name : module.variants_in_order) {
+                auto& variant_def = variant_map[variant_name];
+                if (has(variant_def.backend, backend)) {
+                    file_w << std::format(
+                        "typedef struct {} {};\n",
+                        GetCFullTypename(variant_def.name, backend),
+                        GetCFullTypename(variant_def.name)
+                    );
+                }
+            }
+        }
+
+        if (backend != Backend::Metal) {
+            file_w << "\n\n//==============================================================\n"
+                      "// Functions\n"
+                      "//==============================================================\n\n";
+        }
+
+        // Write view getters for handles
         for (auto& handle_name : module.handles_in_order) {
             auto& handle_def = handle_map[handle_name];
-            if (has(handle_def.GetBackend(), Backend::Vulkan)) {
+            if (has(handle_def.GetBackend(), backend) && handle_def.GetViewSize(backend) > 0) {
                 file_w << std::format(
-                    "typedef struct {} {};\n",
-                    GetCFullTypename(handle_def.name, Backend::Vulkan),
-                    GetCFullTypename(handle_def.name)
+                    "#define wisGet{}View wisGet{}{}View\n",
+                    handle_def.name,
+                    GetBackendSuffix(backend),
+                    handle_def.name
                 );
             }
         }
 
-        // Write Views for handles
-        for (auto& handle_name : module.views_in_order) {
-            auto& handle_def = handle_map[handle_name];
-            if (handle_def.GetViewSize(Backend::Vulkan) > 0) {
+        // Write functions
+        for (auto& func_name : module.functions_in_order) {
+            auto& func_def = function_map[func_name];
+            if (has(func_def.backend, backend)) {
                 file_w << std::format(
-                    "typedef struct {}View {}View;\n",
-                    GetCFullTypename(handle_def.name, Backend::Vulkan),
-                    GetCFullTypename(handle_def.name)
+                    "#define {} {}\n",
+                    GetCFullFunctionName(func_name),
+                    GetCFullFunctionName(func_name, backend)
                 );
             }
-        }
-    }
-
-    if (vk_has_variants) {
-        file_w << "\n\n//==============================================================\n"
-                  "// Variants\n"
-                  "//==============================================================\n\n";
-
-        // Write variants
-        for (auto& variant_name : module.variants_in_order) {
-            auto& variant_def = variant_map[variant_name];
-            if (has(variant_def.backend, Backend::Vulkan)) {
-                file_w << std::format(
-                    "typedef struct {} {};\n",
-                    GetCFullTypename(variant_def.name, Backend::Vulkan),
-                    GetCFullTypename(variant_def.name)
-                );
-            }
-        }
-    }
-
-    file_w << "\n\n//==============================================================\n"
-              "// Functions\n"
-              "//==============================================================\n\n";
-
-    // Write view getters for handles
-    for (auto& handle_name : module.handles_in_order) {
-        auto& handle_def = handle_map[handle_name];
-        if (has(handle_def.GetBackend(), Backend::Vulkan) && handle_def.GetViewSize(Backend::Vulkan) > 0) {
-            file_w << std::format(
-                "#define wisGet{}View wisGet{}{}View\n",
-                handle_def.name,
-                GetBackendSuffix(Backend::Vulkan),
-                handle_def.name
-            );
-        }
-    }
-
-    // Write functions
-    for (auto& func_name : module.functions_in_order) {
-        auto& func_def = function_map[func_name];
-        if (has(func_def.backend, Backend::Vulkan)) {
-            file_w << std::format(
-                "#define {} {}\n",
-                GetCFullFunctionName(func_name),
-                GetCFullFunctionName(func_name, Backend::Vulkan)
-            );
         }
     }
 
     file_w << R"(
 #else
-#error "No API selected for Wisdom. Define WISDOM_DX12 or WISDOM_VULKAN."
+#error "No API selected for Wisdom. Define WISDOM_DX12, WISDOM_VULKAN or WISDOM_METAL."
 #endif // API selection
 
 #ifndef WISDOM_HANDLE_VALID_DEFINED
@@ -915,213 +734,119 @@ namespace wis {{
         backend_include
     );
 
-    if (module.name == "Core") {
-        file_w << "static constexpr wis::ShaderIntermediate shader_intermediate = wis::ShaderIntermediate::DXIL;\n";
-    }
-
-    bool dx_has_handles = false;
-    for (auto& handle_name : module.handles_in_order) {
-        if (has(handle_map[handle_name].GetBackend(), Backend::DX12)) {
-            dx_has_handles = true;
-            break;
+    for (auto backend : Backends) {
+        if (backend == Backend::Vulkan) {
+            file_w << "\n} // namespace wis\n\n#elif defined(WISDOM_VULKAN)\n\nnamespace wis {\n";
+        } else if (backend == Backend::Metal) {
+            file_w << "\n} // namespace wis\n#elif defined(WISDOM_METAL)\nnamespace wis {\n";
         }
-    }
-    if (!dx_has_handles) {
-        for (auto& handle_name : module.views_in_order) {
-            if (handle_map[handle_name].GetViewSize(Backend::DX12) > 0) {
-                dx_has_handles = true;
+        if (module.name == "Core" && backend != Backend::Metal) {
+            file_w << std::format(
+                "static constexpr wis::ShaderIntermediate shader_intermediate = wis::ShaderIntermediate::{};\n",
+                backend == Backend::DX12 ? "DXIL" : "SPIRV"
+            );
+        }
+
+        bool has_handles = false;
+        for (auto& handle_name : module.handles_in_order) {
+            if (has(handle_map[handle_name].GetBackend(), backend)) {
+                has_handles = true;
                 break;
             }
         }
-    }
-
-    bool dx_has_variants = false;
-    for (auto& variant_name : module.variants_in_order) {
-        if (has(variant_map[variant_name].backend, Backend::DX12)) {
-            dx_has_variants = true;
-            break;
-        }
-    }
-
-    bool dx_has_functions = false;
-    for (auto& func_name : module.free_functions_in_order) {
-        FunctionKey key = MakeFunctionKey("", func_name);
-        if (has(function_map[key].backend, Backend::DX12)) {
-            dx_has_functions = true;
-            break;
-        }
-    }
-
-    if (dx_has_handles) {
-        file_w << "\n\n//==============================================================\n"
-                  "// Handles\n"
-                  "//==============================================================\n\n";
-
-        // Write handles
-        for (auto& handle_name : module.handles_in_order) {
-            auto& handle_def = handle_map[handle_name];
-            if (has(handle_def.GetBackend(), Backend::DX12)) {
-                file_w << std::format(
-                    "using {} = {};\n",
-                    handle_def.name,
-                    GetCPPFullTypename(handle_def.name, Backend::DX12)
-                );
+        if (!has_handles) {
+            for (auto& handle_name : module.views_in_order) {
+                if (handle_map[handle_name].GetViewSize(backend) > 0) {
+                    has_handles = true;
+                    break;
+                }
             }
         }
 
-        // Write Views for handles
-        for (auto& handle_name : module.views_in_order) {
-            auto& handle_def = handle_map[handle_name];
-            if (handle_def.GetViewSize(Backend::DX12) > 0) {
-                file_w << std::format(
-                    "using {}View = {};\n",
-                    handle_def.name,
-                    GetCPPFullTypename(handle_def.name, Backend::DX12) + "View"
-                );
-            }
-        }
-    }
-
-    if (dx_has_variants) {
-        file_w << "\n\n//==============================================================\n"
-                  "// Variants\n"
-                  "//==============================================================\n\n";
-
-        // Write variants
+        bool has_variants = false;
         for (auto& variant_name : module.variants_in_order) {
-            auto& variant_def = variant_map[variant_name];
-            if (has(variant_def.backend, Backend::DX12)) {
-                file_w << std::format(
-                    "using {} = {};\n",
-                    variant_def.name,
-                    GetCPPFullTypename(variant_def.name, Backend::DX12)
-                );
-            }
-        }
-    }
-
-    if (dx_has_functions) {
-        file_w << "\n\n//==============================================================\n"
-                  "// Functions\n"
-                  "//==============================================================\n\n";
-
-        // Write functions
-        for (auto& func_name : module.free_functions_in_order) {
-            FunctionKey key = MakeFunctionKey("", func_name);
-            auto& func_def = function_map[key];
-            if (has(func_def.backend, Backend::DX12)) {
-                file_w << MakeCPPFunctionImpl(func_def, Backend::DX12, "inline ", DocKind::Full, ProtoType::Universal);
-                file_w << '\n';
-            }
-        }
-    }
-
-    file_w << R"(
-} // namespace wis
-
-#elif defined(WISDOM_VULKAN)
-
-namespace wis {
-)";
-
-    if (module.name == "Core") {
-        file_w << "static constexpr wis::ShaderIntermediate shader_intermediate = wis::ShaderIntermediate::SPIRV;\n";
-    }
-
-    bool vk_has_handles = false;
-    for (auto& handle_name : module.handles_in_order) {
-        if (has(handle_map[handle_name].GetBackend(), Backend::Vulkan)) {
-            vk_has_handles = true;
-            break;
-        }
-    }
-    if (!vk_has_handles) {
-        for (auto& handle_name : module.views_in_order) {
-            if (handle_map[handle_name].GetViewSize(Backend::Vulkan) > 0) {
-                vk_has_handles = true;
+            if (has(variant_map[variant_name].backend, backend)) {
+                has_variants = true;
                 break;
             }
         }
-    }
 
-    bool vk_has_variants = false;
-    for (auto& variant_name : module.variants_in_order) {
-        if (has(variant_map[variant_name].backend, Backend::Vulkan)) {
-            vk_has_variants = true;
-            break;
-        }
-    }
-
-    bool vk_has_functions = false;
-    for (auto& func_name : module.free_functions_in_order) {
-        FunctionKey key = MakeFunctionKey("", func_name);
-        if (has(function_map[key].backend, Backend::Vulkan)) {
-            vk_has_functions = true;
-            break;
-        }
-    }
-
-    if (vk_has_handles) {
-        file_w << "\n\n//==============================================================\n"
-                  "// Handles\n"
-                  "//==============================================================\n\n";
-
-        // Write handles
-        for (auto& handle_name : module.handles_in_order) {
-            auto& handle_def = handle_map[handle_name];
-            if (has(handle_def.GetBackend(), Backend::Vulkan)) {
-                file_w << std::format(
-                    "using {} = {};\n",
-                    handle_def.name,
-                    GetCPPFullTypename(handle_def.name, Backend::Vulkan)
-                );
-            }
-        }
-
-        // Write Views for handles
-        for (auto& handle_name : module.views_in_order) {
-            auto& handle_def = handle_map[handle_name];
-            if (handle_def.GetViewSize(Backend::Vulkan) > 0) {
-                file_w << std::format(
-                    "using {}View = {};\n",
-                    handle_def.name,
-                    GetCPPFullTypename(handle_def.name, Backend::Vulkan) + "View"
-                );
-            }
-        }
-    }
-
-    if (vk_has_variants) {
-        file_w << "\n\n//==============================================================\n"
-                  "// Variants\n"
-                  "//==============================================================\n\n";
-
-        // Write variants
-        for (auto& variant_name : module.variants_in_order) {
-            auto& variant_def = variant_map[variant_name];
-            if (has(variant_def.backend, Backend::Vulkan)) {
-                file_w << std::format(
-                    "using {} = {};\n",
-                    variant_def.name,
-                    GetCPPFullTypename(variant_def.name, Backend::Vulkan)
-                );
-            }
-        }
-    }
-
-    if (vk_has_functions) {
-        file_w << "\n\n//==============================================================\n"
-                  "// Functions\n"
-                  "//==============================================================\n\n";
-
-        // Write functions
+        bool has_functions = false;
         for (auto& func_name : module.free_functions_in_order) {
             FunctionKey key = MakeFunctionKey("", func_name);
-            auto& func_def = function_map[key];
-            if (has(func_def.backend, Backend::Vulkan)) {
-                file_w
-                    << MakeCPPFunctionImpl(func_def, Backend::Vulkan, "inline ", DocKind::Full, ProtoType::Universal);
-                file_w << '\n';
+            if (has(function_map[key].backend, backend)) {
+                has_functions = true;
+                break;
+            }
+        }
+
+        if (has_handles) {
+            if (backend != Backend::Metal) {
+                file_w << "\n\n//==============================================================\n"
+                          "// Handles\n"
+                          "//==============================================================\n\n";
+            }
+
+            // Write handles
+            for (auto& handle_name : module.handles_in_order) {
+                auto& handle_def = handle_map[handle_name];
+                if (has(handle_def.GetBackend(), backend)) {
+                    file_w << std::format(
+                        "using {} = {};\n",
+                        handle_def.name,
+                        GetCPPFullTypename(handle_def.name, backend)
+                    );
+                }
+            }
+
+            // Write Views for handles
+            for (auto& handle_name : module.views_in_order) {
+                auto& handle_def = handle_map[handle_name];
+                if (has(handle_def.GetBackend(), backend) && handle_def.GetViewSize(backend) > 0) {
+                    file_w << std::format(
+                        "using {}View = {};\n",
+                        handle_def.name,
+                        GetCPPFullTypename(handle_def.name, backend) + "View"
+                    );
+                }
+            }
+        }
+
+        if (has_variants) {
+            if (backend != Backend::Metal) {
+                file_w << "\n\n//==============================================================\n"
+                          "// Variants\n"
+                          "//==============================================================\n\n";
+            }
+
+            // Write variants
+            for (auto& variant_name : module.variants_in_order) {
+                auto& variant_def = variant_map[variant_name];
+                if (has(variant_def.backend, backend)) {
+                    file_w << std::format(
+                        "using {} = {};\n",
+                        variant_def.name,
+                        GetCPPFullTypename(variant_def.name, backend)
+                    );
+                }
+            }
+        }
+
+        if (has_functions) {
+            if (backend != Backend::Metal) {
+                file_w << "\n\n//==============================================================\n"
+                          "// Functions\n"
+                          "//==============================================================\n\n";
+            }
+
+            // Write functions
+            for (auto& func_name : module.free_functions_in_order) {
+                FunctionKey key = MakeFunctionKey("", func_name);
+                auto& func_def = function_map[key];
+                if (has(func_def.backend, backend)) {
+                    file_w << MakeCPPFunctionImpl(func_def, backend, "inline ", DocKind::Full, ProtoType::Universal);
+                    file_w << '\n';
+                }
             }
         }
     }
@@ -1129,7 +854,7 @@ namespace wis {
     file_w << R"(
 } // namespace wis
 #else
-#error "No API selected for Wisdom. Define WISDOM_DX12 or WISDOM_VULKAN."
+#error "No API selected for Wisdom. Define WISDOM_DX12, WISDOM_VULKAN or WISDOM_METAL."
 #endif // API selection
 )";
     file_w << std::format("#endif // {}\n", header_guard);
@@ -1707,6 +1432,9 @@ Backend Generator::ParseBackend(std::string_view backend) noexcept
     }
     if (backend == "vk" || backend == "VK") {
         return Backend::Vulkan;
+    }
+    if (backend == "mtl" || backend == "MTL") {
+        return Backend::Metal;
     }
     return Backend::Any;
 }
