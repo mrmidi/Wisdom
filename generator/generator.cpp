@@ -437,11 +437,10 @@ namespace wis {{
     for (auto backend : Backends) {
         auto define = GetBackendDefine(backend);
         file << std::format(
-            "\n#ifdef {}\n#include <{}/{}>\n{}namespace wis {{\n",
+            "\n#ifdef {}\n#include <{}/{}>\n\nnamespace wis {{\n",
             define,
             include_root,
-            GetBackendTypesHeader(backend),
-            backend == Backend::Metal ? "" : "\n"
+            GetBackendTypesHeader(backend)
         );
 
         // Write Views for handles
@@ -547,7 +546,7 @@ static_assert(WISDOM_UWP && _WIN32, "Platform error");
         if (backend == Backend::Vulkan) {
             file_w << "\n#elif defined(WISDOM_VULKAN)\n";
         } else if (backend == Backend::Metal) {
-            file_w << "\n#elif defined(WISDOM_METAL)\n\n";
+            file_w << "\n#elif defined(WISDOM_METAL)\n";
         }
         if (module.name == "Core" && backend != Backend::Metal) {
             file_w << std::format(
@@ -581,11 +580,9 @@ static_assert(WISDOM_UWP && _WIN32, "Platform error");
         }
 
         if (has_handles) {
-            if (backend != Backend::Metal) {
-                file_w << "\n\n//==============================================================\n"
-                          "// Handles\n"
-                          "//==============================================================\n\n";
-            }
+            file_w << "\n\n//==============================================================\n"
+                      "// Handles\n"
+                      "//==============================================================\n\n";
 
             // Write handles
             for (auto& handle_name : module.handles_in_order) {
@@ -613,11 +610,9 @@ static_assert(WISDOM_UWP && _WIN32, "Platform error");
         }
 
         if (has_variants) {
-            if (backend != Backend::Metal) {
-                file_w << "\n\n//==============================================================\n"
-                          "// Variants\n"
-                          "//==============================================================\n\n";
-            }
+            file_w << "\n\n//==============================================================\n"
+                      "// Variants\n"
+                      "//==============================================================\n\n";
 
             // Write variants
             for (auto& variant_name : module.variants_in_order) {
@@ -632,11 +627,9 @@ static_assert(WISDOM_UWP && _WIN32, "Platform error");
             }
         }
 
-        if (backend != Backend::Metal) {
-            file_w << "\n\n//==============================================================\n"
-                      "// Functions\n"
-                      "//==============================================================\n\n";
-        }
+        file_w << "\n\n//==============================================================\n"
+                  "// Functions\n"
+                  "//==============================================================\n\n";
 
         // Write view getters for handles
         for (auto& handle_name : module.handles_in_order) {
@@ -738,7 +731,7 @@ namespace wis {{
         if (backend == Backend::Vulkan) {
             file_w << "\n} // namespace wis\n\n#elif defined(WISDOM_VULKAN)\n\nnamespace wis {\n";
         } else if (backend == Backend::Metal) {
-            file_w << "\n} // namespace wis\n#elif defined(WISDOM_METAL)\nnamespace wis {\n";
+            file_w << "\n} // namespace wis\n\n#elif defined(WISDOM_METAL)\n\nnamespace wis {\n";
         }
         if (module.name == "Core" && backend != Backend::Metal) {
             file_w << std::format(
@@ -781,11 +774,9 @@ namespace wis {{
         }
 
         if (has_handles) {
-            if (backend != Backend::Metal) {
-                file_w << "\n\n//==============================================================\n"
-                          "// Handles\n"
-                          "//==============================================================\n\n";
-            }
+            file_w << "\n\n//==============================================================\n"
+                      "// Handles\n"
+                      "//==============================================================\n\n";
 
             // Write handles
             for (auto& handle_name : module.handles_in_order) {
@@ -813,11 +804,9 @@ namespace wis {{
         }
 
         if (has_variants) {
-            if (backend != Backend::Metal) {
-                file_w << "\n\n//==============================================================\n"
-                          "// Variants\n"
-                          "//==============================================================\n\n";
-            }
+            file_w << "\n\n//==============================================================\n"
+                      "// Variants\n"
+                      "//==============================================================\n\n";
 
             // Write variants
             for (auto& variant_name : module.variants_in_order) {
@@ -833,11 +822,9 @@ namespace wis {{
         }
 
         if (has_functions) {
-            if (backend != Backend::Metal) {
-                file_w << "\n\n//==============================================================\n"
-                          "// Functions\n"
-                          "//==============================================================\n\n";
-            }
+            file_w << "\n\n//==============================================================\n"
+                      "// Functions\n"
+                      "//==============================================================\n\n";
 
             // Write functions
             for (auto& func_name : module.free_functions_in_order) {

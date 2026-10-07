@@ -4,7 +4,11 @@
 #include <wisdom/generated/cpp_api.hpp>
 
 namespace wis::detail {
-inline constexpr WisResult metal_instance_not_implemented{WisStatusFail, 0, "Metal instance creation is not implemented"};
+inline constexpr WisResult metal_instance_not_implemented{
+    WisStatusFail,
+    0,
+    "Metal instance creation is not implemented"
+};
 } // namespace wis::detail
 
 //----------------------------------------------------------------------------------------------------------------------
