@@ -33,6 +33,7 @@ enum class Backend {
     Vulkan = 1 << 1,
     All = DX12 | Vulkan,
 };
+inline constexpr std::array Backends{Backend::DX12, Backend::Vulkan};
 constexpr Backend operator|(Backend a, Backend b)
 {
     return static_cast<Backend>(static_cast<int>(a) | static_cast<int>(b));

@@ -188,6 +188,28 @@ public:
             return "";
         }
     }
+    static constexpr std::string_view GetBackendDefine(Backend backend) noexcept
+    {
+        switch (backend) {
+        case Backend::DX12:
+            return "WISDOM_DX12";
+        case Backend::Vulkan:
+            return "WISDOM_VULKAN";
+        default:
+            return "";
+        }
+    }
+    static constexpr std::string_view GetBackendTypesHeader(Backend backend) noexcept
+    {
+        switch (backend) {
+        case Backend::DX12:
+            return "dx12/dx12_types.hpp";
+        case Backend::Vulkan:
+            return "vulkan/vk_types.hpp";
+        default:
+            std::abort();
+        }
+    }
     static constexpr std::string_view GetExtendsString(Extends impl) noexcept
     {
         switch (impl) {
