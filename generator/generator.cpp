@@ -64,6 +64,7 @@ void Generator::WriteModuleAPI()
     auto& module = it->second;
     std::filesystem::path cpp_output_path = std::filesystem::path(main_output_dir) / module.gen_path;
     std::filesystem::path cpp_output_path_api = cpp_output_path / "generated";
+    std::filesystem::create_directories(cpp_output_path_api);
     WriteCAPI(cpp_output_path_api);
     WriteCPPAPI(cpp_output_path_api);
 
@@ -445,7 +446,7 @@ namespace wis {{
         // Write Views for handles
         for (auto& handle_name : module.views_in_order) {
             auto& handle_def = handle_map[handle_name];
-            if (handle_def.GetViewSize(backend) > 0) {
+            if (has(handle_def.GetBackend(), backend) && handle_def.GetViewSize(backend) > 0) {
                 file << MakeCPPView(handle_def, backend);
                 file << "\n";
             }
@@ -544,8 +545,10 @@ static_assert(WISDOM_UWP && _WIN32, "Platform error");
     for (auto backend : Backends) {
         if (backend == Backend::Vulkan) {
             file_w << "\n#elif defined(WISDOM_VULKAN)\n";
+        } else if (backend == Backend::Metal) {
+            file_w << "\n#elif defined(WISDOM_METAL)\n";
         }
-        if (module.name == "Core") {
+        if (module.name == "Core" && backend != Backend::Metal) {
             file_w << std::format(
                 "\n#define WIS_SHADER_INTERMEDIATE_{} 1\n",
                 backend == Backend::DX12 ? "DXIL" : "SPIRV"
@@ -596,7 +599,7 @@ static_assert(WISDOM_UWP && _WIN32, "Platform error");
             // Write Views for handles
             for (auto& handle_name : module.views_in_order) {
                 auto& handle_def = handle_map[handle_name];
-                if (handle_def.GetViewSize(backend) > 0) {
+                if (has(handle_def.GetBackend(), backend) && handle_def.GetViewSize(backend) > 0) {
                     file_w << std::format(
                         "typedef struct {}View {}View;\n",
                         GetCFullTypename(handle_def.name, backend),
@@ -656,7 +659,7 @@ static_assert(WISDOM_UWP && _WIN32, "Platform error");
 
     file_w << R"(
 #else
-#error "No API selected for Wisdom. Define WISDOM_DX12 or WISDOM_VULKAN."
+#error "No API selected for Wisdom. Define WISDOM_DX12, WISDOM_VULKAN or WISDOM_METAL."
 #endif // API selection
 
 #ifndef WISDOM_HANDLE_VALID_DEFINED
@@ -727,8 +730,10 @@ namespace wis {{
     for (auto backend : Backends) {
         if (backend == Backend::Vulkan) {
             file_w << "\n} // namespace wis\n\n#elif defined(WISDOM_VULKAN)\n\nnamespace wis {\n";
+        } else if (backend == Backend::Metal) {
+            file_w << "\n} // namespace wis\n\n#elif defined(WISDOM_METAL)\n\nnamespace wis {\n";
         }
-        if (module.name == "Core") {
+        if (module.name == "Core" && backend != Backend::Metal) {
             file_w << std::format(
                 "static constexpr wis::ShaderIntermediate shader_intermediate = wis::ShaderIntermediate::{};\n",
                 backend == Backend::DX12 ? "DXIL" : "SPIRV"
@@ -788,7 +793,7 @@ namespace wis {{
             // Write Views for handles
             for (auto& handle_name : module.views_in_order) {
                 auto& handle_def = handle_map[handle_name];
-                if (handle_def.GetViewSize(backend) > 0) {
+                if (has(handle_def.GetBackend(), backend) && handle_def.GetViewSize(backend) > 0) {
                     file_w << std::format(
                         "using {}View = {};\n",
                         handle_def.name,
@@ -836,7 +841,7 @@ namespace wis {{
     file_w << R"(
 } // namespace wis
 #else
-#error "No API selected for Wisdom. Define WISDOM_DX12 or WISDOM_VULKAN."
+#error "No API selected for Wisdom. Define WISDOM_DX12, WISDOM_VULKAN or WISDOM_METAL."
 #endif // API selection
 )";
     file_w << std::format("#endif // {}\n", header_guard);
@@ -1414,6 +1419,9 @@ Backend Generator::ParseBackend(std::string_view backend) noexcept
     }
     if (backend == "vk" || backend == "VK") {
         return Backend::Vulkan;
+    }
+    if (backend == "mtl" || backend == "MTL") {
+        return Backend::Metal;
     }
     return Backend::Any;
 }

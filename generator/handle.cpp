@@ -52,6 +52,8 @@ void Generator::ParseHandles(tinyxml2::XMLElement* types)
                 ref.sizes[0] = size;
             } else if (backend == Backend::Vulkan) {
                 ref.sizes[1] = size;
+            } else if (backend == Backend::Metal) {
+                ref.sizes[2] = size;
             }
         }
 
@@ -153,6 +155,8 @@ void Generator::ParseHandles(tinyxml2::XMLElement* types)
                 ref.view_sizes[0] = size;
             } else if (backend == Backend::Vulkan) {
                 ref.view_sizes[1] = size;
+            } else if (backend == Backend::Metal) {
+                ref.view_sizes[2] = size;
             }
         }
 
@@ -271,6 +275,9 @@ std::string Generator::MakeCPPHandle(const WisHandle& s, Backend backend, DocKin
     for (const auto& func_name : s.functions) {
         FunctionKey func_key{s.name, func_name};
         auto& func_ref = function_map[func_key];
+        if (!has(func_ref.backend, backend)) {
+            continue;
+        }
         auto c_name = std::format(
             "wis{}{}{}",
             impl_string,

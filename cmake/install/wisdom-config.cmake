@@ -4,7 +4,12 @@ include(CMakeFindDependencyMacro)
 include("${CMAKE_CURRENT_LIST_DIR}/functions.cmake")
 
 # Detect platform and graphics APIs
+if(@WISDOM_METAL@)
+set(WISDOM_VULKAN OFF)
+set(WISDOM_DX12 OFF)
+else()
 wisdom_detect_platform()
+endif()
 
 # Set DX12 Agility paths
 if(WISDOM_WINDOWS)

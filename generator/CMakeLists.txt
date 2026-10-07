@@ -30,13 +30,20 @@ target_sources(
           "validation.cpp"
           "bitmask.cpp"
           "constant.cpp")
+set(CPP_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../src")
+set(DOC_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../docs")
+if(WISDOM_METAL)
+  set(CPP_OUTPUT_DIR "${WISDOM_METAL_API_DIR}")
+  set(DOC_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/docs")
+endif()
+
 target_compile_definitions(
   ${PROJECT_NAME}
   PRIVATE CLANG_FORMAT_EXECUTABLE="${CLANG_FORMAT_EXECUTABLE}"
           WISDOM_VERSION="${WISDOM_VERSION}"
           "INPUT_FILE=\"${CMAKE_CURRENT_SOURCE_DIR}/../xml/wis.xml\""
-          "CPP_OUTPUT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/../src\""
-          "DOC_OUTPUT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/../docs\"")
+          "CPP_OUTPUT_DIR=\"${CPP_OUTPUT_DIR}\""
+          "DOC_OUTPUT_DIR=\"${DOC_OUTPUT_DIR}\"")
 target_include_directories(
   ${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../wisdom/include")
 target_link_libraries(${PROJECT_NAME} PRIVATE tinyxml2::tinyxml2)
@@ -58,3 +65,23 @@ add_custom_target(
   COMMENT "Generating Video extension API"
   DEPENDS ${PROJECT_NAME}
   VERBATIM)
+
+if(WISDOM_METAL)
+  file(GLOB_RECURSE WISDOM_METAL_API_INPUTS CONFIGURE_DEPENDS
+       "${CMAKE_CURRENT_SOURCE_DIR}/../xml/*.xml")
+  add_custom_command(
+    OUTPUT "${WISDOM_METAL_API_DIR}/include/wisdom/generated/c_api.h"
+           "${WISDOM_METAL_API_DIR}/include/wisdom/generated/cpp_api.hpp"
+           "${WISDOM_METAL_API_DIR}/include/wisdom/wisdom.h"
+           "${WISDOM_METAL_API_DIR}/include/wisdom/wisdom.hpp"
+    BYPRODUCTS "${WISDOM_METAL_API_DIR}/include/wisdom/generated/dx12_convert.hpp"
+               "${WISDOM_METAL_API_DIR}/include/wisdom/generated/vk_convert.hpp"
+    COMMAND $<TARGET_FILE:generator>
+    DEPENDS generator ${WISDOM_METAL_API_INPUTS}
+    COMMENT "Generating Metal interfaces"
+    VERBATIM)
+  add_custom_target(
+    generate-metal-api
+    DEPENDS "${WISDOM_METAL_API_DIR}/include/wisdom/generated/c_api.h"
+            "${WISDOM_METAL_API_DIR}/include/wisdom/generated/cpp_api.hpp")
+endif()

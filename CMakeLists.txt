@@ -9,7 +9,6 @@ project(
 include(GNUInstallDirs)
 include(GenerateExportHeader)
 include(cmake/functions.cmake)
-wisdom_detect_platform()
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   set(WTOP ON)
@@ -19,12 +18,20 @@ endif()
 
 # Options
 option(WISDOM_FORCE_VULKAN "Force Vulkan support" OFF)
+option(WISDOM_METAL "Build the Metal backend. macOS only." OFF)
 option(WISDOM_BUILD_EXAMPLES "Build the example project." OFF)
-option(WISDOM_BUILD_GENERATOR "Build the API generator." OFF)
+option(WISDOM_BUILD_GENERATOR "Build the API generator." ${WISDOM_METAL})
 option(WISDOM_BUILD_TESTS "Build the tests." ${WTOP})
 option(WISDOM_BUILD_STATIC "Build the static lib." ON)
 option(WISDOM_BUILD_SHARED "Build the dynamic lib." ON)
-option(WISDOM_BUILD_PLATFORM "Build unified platform extension library." ON)
+# Platform extensions are not implemented by the Metal backend.
+set(WISDOM_PLATFORM_DEFAULT ON)
+if(WISDOM_METAL)
+  set(WISDOM_PLATFORM_DEFAULT OFF)
+endif()
+option(WISDOM_BUILD_PLATFORM "Build unified platform extension library."
+       ${WISDOM_PLATFORM_DEFAULT})
+
 option(WISDOM_BUILD_DOCS "Build the documentation." OFF)
 option(WISDOM_USE_AGILITY_SDK "Download and use DirectX 12 Agility SDK." ON)
 option(WISDOM_USE_CONAN
@@ -34,6 +41,12 @@ option(WISDOM_USE_CONAN
 set(WISDOM_VULKAN_HEADER_PATH
     ""
     CACHE PATH "Path to custom Vulkan Headers (optional)")
+
+if(WISDOM_METAL)
+  set(WISDOM_METAL_API_DIR "${CMAKE_CURRENT_BINARY_DIR}/metal-api")
+  wisdom_validate_metal()
+endif()
+wisdom_detect_platform()
 
 # Conan includes Vulkan Headers.
 if(WISDOM_USE_CONAN)
@@ -50,6 +63,7 @@ message(
     WISDOM_VULKAN: ${WISDOM_VULKAN}
     WISDOM_VULKAN_VERSION: ${WISDOM_VULKAN_VERSION}
     WISDOM_DX12: ${WISDOM_DX12}
+    WISDOM_METAL: ${WISDOM_METAL}
     WISDOM_VERSION: ${WISDOM_VERSION}
     WISDOM_PLATFORM: ${WISDOM_PLATFORM}
 
@@ -71,6 +85,7 @@ endif()
 add_subdirectory(src) # add main libraries
 
 if(WISDOM_BUILD_TESTS)
+  include(CTest)
   add_subdirectory(tests)
 endif()
 

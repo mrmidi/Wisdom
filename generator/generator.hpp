@@ -171,6 +171,8 @@ public:
             return "DX12";
         case Backend::Vulkan:
             return "VK";
+        case Backend::Metal:
+            return "MTL";
         default:
             return "";
         }
@@ -184,6 +186,8 @@ public:
             return "dx";
         case Backend::Vulkan:
             return "vk";
+        case Backend::Metal:
+            return "mtl";
         default:
             return "";
         }
@@ -195,6 +199,8 @@ public:
             return "WISDOM_DX12";
         case Backend::Vulkan:
             return "WISDOM_VULKAN";
+        case Backend::Metal:
+            return "WISDOM_METAL";
         default:
             return "";
         }
@@ -206,6 +212,8 @@ public:
             return "dx12/dx12_types.hpp";
         case Backend::Vulkan:
             return "vulkan/vk_types.hpp";
+        case Backend::Metal:
+            return "metal/mtl_types.hpp";
         default:
             std::abort();
         }
