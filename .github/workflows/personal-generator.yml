@@ -1,0 +1,121 @@
+name: Personal generator CI
+
+on:
+  push:
+    branches:
+      - ci/generator-backends
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: personal-generator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  existing-backends:
+    if: github.repository == 'mrmidi/Wisdom'
+    uses: ./.github/workflows/ci.yml
+
+  generation:
+    name: Generator output parity
+    if: github.repository == 'mrmidi/Wisdom'
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install generator dependencies
+        run: brew install tinyxml2 clang-format
+
+      - name: Record toolchain and prepare sources
+        run: |
+          mkdir -p comparison/logs
+          {
+            xcodebuild -version
+            xcrun clang++ --version
+            cmake --version
+            ninja --version
+            clang-format --version
+            brew list --versions tinyxml2
+            git rev-parse HEAD
+            git rev-parse 7e0fd1ccceac1529f117cb322f83dc1e5ce811d9
+          } > comparison/logs/toolchain.log
+          for variant in baseline cleanup; do
+            if [ "$variant" = baseline ]; then
+              ref=7e0fd1ccceac1529f117cb322f83dc1e5ce811d9
+            else
+              ref=HEAD
+            fi
+            mkdir -p "comparison/$variant"
+            git archive "$ref" generator xml .clang-format | tar -x -C "comparison/$variant"
+            mkdir -p "comparison/$variant/src/include/wisdom/generated" \
+              "comparison/$variant/src/platform/wisdom_platform/generated" \
+              "comparison/$variant/src/platform/wisdom"
+          done
+
+      - name: Build, generate and compare raw and formatted output
+        run: |
+          for phase in raw formatted; do
+            formatter=""
+            if [ "$phase" = formatted ]; then
+              formatter="$(command -v clang-format)"
+            fi
+            for variant in baseline cleanup; do
+              log="$PWD/comparison/logs/$phase-$variant.log"
+              {
+                cmake -S "comparison/$variant/generator" -B "build/$variant" -G Ninja \
+                  -DCMAKE_BUILD_TYPE=Release \
+                  -DWISDOM_VERSION=0.7.1 \
+                  -DCMAKE_PREFIX_PATH="$(brew --prefix tinyxml2)" \
+                  -DCLANG_FORMAT_EXECUTABLE="$formatter"
+                cmake --build "build/$variant" --parallel 3
+                "build/$variant/generator"
+                "build/$variant/generator" platform
+              } > "$log" 2>&1
+            done
+            python3 - "$phase" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          phase = sys.argv[1]
+          manifests = {}
+          for variant in ("baseline", "cleanup"):
+              root = Path("comparison") / variant
+              manifests[variant] = {
+                  str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+                  for folder in ("src", "docs")
+                  for path in sorted((root / folder).rglob("*"))
+                  if path.is_file()
+              }
+          Path(f"comparison/{phase}-manifests.json").write_text(
+              json.dumps(manifests, indent=2)
+          )
+          baseline, cleanup = manifests["baseline"], manifests["cleanup"]
+          differences = [
+              path for path in sorted(baseline.keys() | cleanup.keys())
+              if baseline.get(path) != cleanup.get(path)
+          ]
+          if not baseline or differences:
+              raise SystemExit(f"Generator output mismatch: {differences}")
+          api_count = sum(path.startswith("src/") for path in baseline)
+          doc_count = sum(path.startswith("docs/") for path in baseline)
+          if not api_count or not doc_count:
+              raise SystemExit("Missing generated API or documentation")
+          print(f"{phase}: {api_count} API files and {doc_count} documentation files are byte-identical")
+          PY
+          done
+
+      - name: Upload comparison evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generator-parity
+          path: |
+            comparison/logs/
+            comparison/*-manifests.json
